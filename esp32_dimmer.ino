@@ -30,7 +30,9 @@ void setupWifi() {
       digitalWrite(LED_BUILTIN, i % 2 == 1 ? HIGH : LOW);
       delay(250);
     }
+    digitalWrite(LED_BUILTIN, LOW);
     Serial.print(".");
+
     if ((millis() - lastWifiConnect) > wifiReconnectInterval) {
       return;
     }
@@ -47,38 +49,78 @@ const int ledPin = 23;
 const int pwmChannel = 0;
 const int pwmFreq = 5000;
 const int pwmRes = 8;
-//const int maxLevel = 255;
-//const int minLevel = 0;
+
+// LED settings
+const float dimCurve = 3.0f;
+const int dimDelay = 4;
 
 bool onState = false;
-uint8_t brightness = 255;
+uint8_t brightness = 0;
+uint8_t targetBrightness = 0;
+
+//// LED helpers
+uint8_t calculateAdjustedBrightness(uint8_t brightness) {
+  float xn = brightness / 255.0;
+  float adjusted = 255.0 * pow(xn, dimCurve);
+  uint8_t newBrightness = (uint8_t) adjusted;
+  if (brightness > 0 && newBrightness == 0) {
+    newBrightness = 1;
+  }
+  return newBrightness;
+}
+
+uint16_t currentlyAnimated = 0;
+void ledcSmoothFade(uint8_t pin, uint8_t& brightness, const uint8_t& targetBrigthness) {
+  uint16_t pinBit = 1 << pin;
+  bool duringAnimation = currentlyAnimated & 1 << pin;
+  bool isCorrectBrightness = targetBrightness == brightness;
+  bool isOffAsRequested = !onState && brightness == 0;
+  if (duringAnimation || isCorrectBrightness || isOffAsRequested) {
+    return;
+  }
+  currentlyAnimated |= pinBit;
+
+  Serial.printf("Smoothly fading brightness = %d..%d,, Adjusted Brightness = %d, Curve = %f\r\n", brightness, targetBrightness, calculateAdjustedBrightness(targetBrightness), dimCurve);
+  Serial.printf("Fading... ");
+
+  while ((onState && brightness != targetBrightness) || (!onState && brightness > 0)) {
+    uint8_t nextStep = brightness;
+    uint8_t target = onState ? targetBrightness : 0;
+    if (target > nextStep) {
+      nextStep += 1;
+    } else {
+      nextStep -= 1;
+    }
+
+    brightness = nextStep;
+    //Serial.printf("%d -> %d, ", nextStep, target);
+
+    uint8_t adjustedStep = calculateAdjustedBrightness(nextStep);
+    ledcWrite(pin, adjustedStep);
+    delay(dimDelay);
+
+    if (brightness == 0 && !onState) {
+      break;
+    }
+  }
+
+  Serial.println("done!");
+  currentlyAnimated &= (0xFFFF ^ pinBit);
+}
 
 //// MATTER 
-MatterDimmableLight DimmableLight;
+MatterDimmableLight dimmableLight;
 
 // Matter Callbacks
 bool setLightOnOff(bool newState) {
   Serial.printf("User Callback :: Switch Light = %s\r\n", newState ? "ON" : "OFF");
-  if (newState != onState) {
-    if (newState) {
-      ledcWrite(ledPin, brightness);
-    } else {
-      ledcWrite(ledPin, 0);
-    }
-  }
   onState = newState;
-  
   return true;
 }
 
 bool setBrightness(uint8_t newBrightness) {
   Serial.printf("User Callback :: Brightness = %d\r\n", newBrightness);
-
-  brightness = newBrightness;
-  if (!onState) {
-    ledcWrite(ledPin, brightness);
-  }
-
+  targetBrightness = newBrightness;
   return true;
 }
 
@@ -100,9 +142,9 @@ void commissionMatter() {
     while (!Matter.isDeviceCommissioned()) {
       digitalWrite(LED_BUILTIN, HIGH);
       delay(50);
-      digitalWrite(LED_BUILTIN, HIGH);
-      delay(50);
       digitalWrite(LED_BUILTIN, LOW);
+      delay(50);
+      digitalWrite(LED_BUILTIN, HIGH);
       delay(50);
       digitalWrite(LED_BUILTIN, LOW);
       delay(450);
@@ -111,10 +153,12 @@ void commissionMatter() {
       }
     }
 
-    DimmableLight.updateAccessory();
+    dimmableLight.updateAccessory();
     Serial.println("Matter Node is commissioned and connected to the network. Ready for use.");
 }
 
+
+// Setup
 void happyBlink() {
   for (int i = 0; i < 8; i++) {
     digitalWrite(LED_BUILTIN, LOW);
@@ -126,28 +170,28 @@ void happyBlink() {
   digitalWrite(LED_BUILTIN, LOW);
 }
 
-// Setup
 void setup() {
   // initial setup
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
   ledcAttachChannel(ledPin, pwmFreq, pwmRes, pwmChannel);
+  ledcWrite(ledPin, 0);
 
   setupWifi();
 
   happyBlink();
 
   // Matter
-  DimmableLight.begin(onState, brightness);
-  DimmableLight.onChange(setLight);
-  DimmableLight.onChangeOnOff(setLightOnOff);
-  DimmableLight.onChangeBrightness(setBrightness);
+  dimmableLight.begin(onState, brightness);
+  dimmableLight.onChange(setLight);
+  dimmableLight.onChangeOnOff(setLightOnOff);
+  dimmableLight.onChangeBrightness(setBrightness);
 
   // Matter beginning - Last step, after all EndPoints are initialized
   Matter.begin();
   if (Matter.isDeviceCommissioned()) {
     Serial.println("Matter Node is commissioned and connected to the network. Ready for use.");
-    DimmableLight.updateAccessory(); 
+    dimmableLight.updateAccessory(); 
   }
 }
 
@@ -163,10 +207,5 @@ void loop() {
     setupWifi();
   }
 
-  // refresh ledc
-  if (onState) {
-    ledcWrite(ledPin, brightness);
-  } else {
-    ledcWrite(ledPin, 0);
-  }
+  ledcSmoothFade(ledPin, brightness, targetBrightness);
 }
