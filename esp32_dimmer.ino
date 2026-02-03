@@ -115,14 +115,7 @@ void commissionMatter() {
     Serial.println("Matter Node is commissioned and connected to the network. Ready for use.");
 }
 
-
-// Setup
-void setup() {
-  // initial setup
-  Serial.begin(115200);
-  pinMode(LED_BUILTIN, OUTPUT);
-  ledcAttachChannel(ledPin, pwmFreq, pwmRes, pwmChannel);
-
+void happyBlink() {
   for (int i = 0; i < 8; i++) {
     digitalWrite(LED_BUILTIN, LOW);
     delay(50);
@@ -131,6 +124,18 @@ void setup() {
   }
   delay(500);
   digitalWrite(LED_BUILTIN, LOW);
+}
+
+// Setup
+void setup() {
+  // initial setup
+  Serial.begin(115200);
+  pinMode(LED_BUILTIN, OUTPUT);
+  ledcAttachChannel(ledPin, pwmFreq, pwmRes, pwmChannel);
+
+  setupWifi();
+
+  happyBlink();
 
   // Matter
   DimmableLight.begin(onState, brightness);
