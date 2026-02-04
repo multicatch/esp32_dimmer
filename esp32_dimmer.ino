@@ -4,9 +4,16 @@
 
 #define LED_BUILTIN 2
 
+#include "wifi_password.h"
+
+#ifndef WIFI_PASSWORD_H
 //// WIFI settings
+// You can also use external "wifi_password.h" file with those constants
+// Just remember to add #define WIFI_PASSWORD_H
+
 const char *ssid = "ssid";          // Change this to your WiFi SSID
 const char *password = "pass";      // Change this to your WiFi password
+#endif
 
 const int wifiReconnectInterval = 60000; // 1min
 unsigned long lastWifiConnect = 0;
@@ -51,7 +58,7 @@ const int pwmFreq = 5000;
 const int pwmRes = 8;
 
 // LED settings
-const float dimCurve = 3.0f;
+const float dimCurve = 2.6f;
 const int dimDelay = 4;
 
 bool onState = false;
@@ -59,7 +66,7 @@ uint8_t brightness = 0;
 uint8_t targetBrightness = 0;
 
 //// LED helpers
-uint8_t calculateAdjustedBrightness(uint8_t brightness) {
+uint8_t calculateAdjustedBrightness(const uint8_t brightness, const float dimCurve) {
   float xn = brightness / 255.0;
   float adjusted = 255.0 * pow(xn, dimCurve);
   uint8_t newBrightness = (uint8_t) adjusted;
@@ -80,7 +87,7 @@ void ledcSmoothFade(uint8_t pin, uint8_t& brightness, const uint8_t& targetBrigt
   }
   currentlyAnimated |= pinBit;
 
-  Serial.printf("Smoothly fading brightness = %d..%d,, Adjusted Brightness = %d, Curve = %f\r\n", brightness, targetBrightness, calculateAdjustedBrightness(targetBrightness), dimCurve);
+  Serial.printf("Smoothly fading brightness = %d..%d,, Adjusted Brightness = %d, Curve = %f\r\n", brightness, targetBrightness, calculateAdjustedBrightness(targetBrightness, dimCurve), dimCurve);
   Serial.printf("Fading... ");
 
   while ((onState && brightness != targetBrightness) || (!onState && brightness > 0)) {
@@ -95,7 +102,7 @@ void ledcSmoothFade(uint8_t pin, uint8_t& brightness, const uint8_t& targetBrigt
     brightness = nextStep;
     //Serial.printf("%d -> %d, ", nextStep, target);
 
-    uint8_t adjustedStep = calculateAdjustedBrightness(nextStep);
+    uint8_t adjustedStep = calculateAdjustedBrightness(nextStep, dimCurve);
     ledcWrite(pin, adjustedStep);
     delay(dimDelay);
 
@@ -125,8 +132,14 @@ bool setBrightness(uint8_t newBrightness) {
 }
 
 bool setLight(bool newState, uint8_t newBrightness) {
-  setBrightness(newBrightness);
-  setLightOnOff(newState);
+  Serial.printf("User Callback :: Switch = %d AND Brightness = %d\r\n", newState, newBrightness);
+  // For some reason, when we turn on/off the light it will get newBrightness = 1
+  // This behavior really breaks the smooth fading 
+  if (newState != onState) {
+    setLightOnOff(newState);
+  } else {
+    setBrightness(newBrightness);
+  }
   return true;
 }
 
