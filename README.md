@@ -9,7 +9,7 @@ This projects uses [Espressif's Matter API](https://docs.espressif.com/projects/
 You can change the following variables:
 
 * `ssid` - change it to your WiFi network SSID (name)
-* `password` - change it to your WiFi passowrd
+* `password` - change it to your WiFi password
 * `ledPin` - ESP32 pin that you want to use as a PWM dimmer (MOSFET gate signal)
 * `dimCurve` - smooth dimming curve ratio (1.0 - linear, lower - less dim, higher - more dim)
 * `dimDelay` - speed of smooth fade (lower = faster) 
@@ -24,3 +24,7 @@ In Arduino IDE select board "ESP32 Dev Module" and change partition scheme to "H
 ## How to pair
 
 Check the serial monitor (115200 baud) for Matter pairing code
+
+## My physical setup
+
+![](./img/schematics.jpeg)

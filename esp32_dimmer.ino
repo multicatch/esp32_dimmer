@@ -4,7 +4,8 @@
 
 #define LED_BUILTIN 2
 
-#include "wifi_password.h"
+// uncomment this if you use external file with wifi password
+//#include "wifi_password.h"
 
 #ifndef WIFI_PASSWORD_H
 //// WIFI settings
